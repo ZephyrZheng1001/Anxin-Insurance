@@ -1,0 +1,127 @@
+services:
+  postgres:
+    image: docker.1panel.live/library/postgres:16
+    container_name: hm-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-insurance}
+      POSTGRES_USER: ${POSTGRES_USER:-insurance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insurance123}
+    ports:
+      # 注意：WSL 里自带的 postgresql 服务已占用 5432，这里默认映射到 15432
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-insurance} -d ${POSTGRES_DB:-insurance}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.13
+    container_name: hm-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  minio:
+    # RELEASE.2024-04-18T19-09-19Z 在 Docker Hub 上已被删除，且 quay.io/minio/minio
+    # 已改为需登录才能拉取；这里使用镜像源上仍可正常拉取的新版本
+    image: docker.1panel.live/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: hm-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin2026}
+    command: minio server /minio_data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/minio_data
+    healthcheck:
+      # 新版 minio 镜像里没有 curl，改用镜像自带的 mc 探测
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  milvus:
+    image: docker.1panel.live/milvusdb/milvus:v3.0.0
+    container_name: hm-milvus
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin2026}
+    command: milvus run standalone
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+      - "9091:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+      # 注意：./milvus/user.yaml 不是 Milvus 2.x/3.x 支持的配置格式，
+      # 挂进去会导致配置解析失败，已注释掉；如需自定义请改用 milvus.yaml 并
+      # 在 command 里加 --config /milvus/configs/milvus.yaml
+      # - ./milvus/user.yaml:/milvus/configs/user.yaml:ro
+    healthcheck:
+      # milvus 镜像里没有 curl，用 bash 的 /dev/tcp 做端口探测
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9091' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+  attu:
+    image: docker.1panel.live/zilliz/attu:v3.0.0-beta.6
+    container_name: hm-attu
+    ports:
+      - "${ATTU_PORT:-3000}:3000"
+    environment:
+      - MILVUS_ADDRESS=milvus:19530
+    volumes:
+      - attu-data:/data
+    depends_on:
+      milvus:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - insurance-net
+
+volumes:
+  postgres_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  attu-data:
+
+networks:
+  insurance-net:
+    driver: bridge
