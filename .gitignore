@@ -1,0 +1,118 @@
+# ============================================================
+# anxinbao 保险智能体项目 .gitignore
+# 结构: 根目录(uv 管理的 Python) / agent-service / frontend(Vite+React) / deploy(Docker)
+# ============================================================
+
+# ---------- 操作系统 / 编辑器 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+
+# ---------- Python (根目录 + agent-service) ----------
+# uv / venv
+.venv/
+venv/
+env/
+.uv/
+.lock
+__pypackages__/
+
+# Python 字节码与缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist-python/
+pip-wheel-metadata/
+
+# 测试 / 类型检查 / 覆盖率
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Jupyter (pyproject 依赖了 ipykernel)
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# 注意: uv.lock 需要提交(锁定依赖)，因此不要在下面再忽略它
+
+# ---------- Node / 前端 (frontend) ----------
+node_modules/
+.pnp/
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+
+# 构建产物
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
+.vite/
+.cache/
+
+# 前端测试 / 覆盖率
+coverage/
+.nyc_output/
+
+# ---------- 环境变量与密钥 (重要) ----------
+agent-service/.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+*secret*.yaml
+*credentials*
+# Milvus 配置里硬编码了 DashScope API Key，只提交 user.yaml.example
+deploy/milvus/user.yaml
+
+# ---------- 日志 / 运行时数据 ----------
+logs/
+*.log
+tmp/
+temp/
+data/
+uploads/
+*.pid
+*.seed
+
+# ---------- 数据库文件 ----------
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ---------- Docker / 部署 ----------
+# compose 备份与本地覆盖文件
+deploy/docker-compose.yml.bak
+docker-compose.override.yml
+docker-compose.*.local.yml
+# 数据卷目录(若有人改成 bind mount 落盘到本地)
+deploy/data/
+deploy/volumes/
+
+# ---------- 备份文件 ----------
+*.bak
+*.orig
+*.rej
